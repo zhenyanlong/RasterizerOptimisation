@@ -1,0 +1,14 @@
+﻿  raster.cpp
+I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\Rasterizer\mesh.h(197,25): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+  (compiling source file 'raster.cpp')
+  
+I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\Rasterizer\mesh.h(202,27): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+  (compiling source file 'raster.cpp')
+  
+I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\Rasterizer\renderer.h(11,30): warning C4305: 'initializing': truncation from 'double' to 'float'
+  (compiling source file 'raster.cpp')
+  
+I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\Rasterizer\raster.cpp(119,69): warning C4305: 'argument': truncation from 'double' to 'float'
+I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\Rasterizer\raster.cpp(120,69): warning C4305: 'argument': truncation from 'double' to 'float'
+I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\Rasterizer\raster.cpp(121,69): warning C4305: 'argument': truncation from 'double' to 'float'
+  Rasterizer.vcxproj -> I:\TestFolder\Rasterizer - 2026\Rasterizer - 2026\x64\Debug\Rasterizer.exe

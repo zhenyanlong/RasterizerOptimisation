@@ -39,10 +39,18 @@ public:
     // Divides the vector by its W component and sets W to 1.
     // Useful for normalizing the W component after transformations.
     void divideW() {
-        x /= w;
-        y /= w;
-        z /= w;
-        w = 1.f;
+		/*x /= w;
+		y /= w;
+		z /= w;
+		w = 1.f;*/
+
+        // Now
+        // / to *
+		const float invW = 1.0f / w;  // 预计算倒数，避免三次除法
+		x *= invW;
+		y *= invW;
+		z *= invW;
+		w = 1.f;
     }
 
     // Accesses a vector component by index.
@@ -103,9 +111,16 @@ public:
     // Normalizes the vector to make its length equal to 1.
     // This operation does not affect the W component.
     void normalise() {
-        float length = std::sqrt(x * x + y * y + z * z);
-        x /= length;
-        y /= length;
-        z /= length;
+		/*float length = std::sqrt(x * x + y * y + z * z);
+		x /= length;
+		y /= length;
+		z /= length;*/
+
+		// Now
+        // / to *
+		float invlength = 1.0f / std::sqrt(x * x + y * y + z * z);
+		x *= invlength;
+		y *= invlength;
+		z *= invlength;
     }
 };

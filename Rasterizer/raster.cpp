@@ -255,13 +255,125 @@ void scene2() {
         delete m;
 }
 
+// Scene: 10¡Á10¡Á10 cubes + random rotation each cube + camera circular orbiting
+// No input variables
+void scene3() {
+	Renderer renderer;
+	matrix camera = matrix::makeIdentity();
+	Light L{ vec4(0.f, 1.f, 1.f, 0.f), colour(1.0f, 1.0f, 1.0f), colour(0.2f, 0.2f, 0.2f) };
+
+	std::vector<Mesh*> scene;
+	struct rRot { float x; float y; float z; };
+	std::vector<rRot> cubeRotations;
+
+	RandomNumberGenerator& rng = RandomNumberGenerator::getInstance();
+
+	// Create a 10¡Á10¡Á10 cubic grid (totaling 1000 cells)
+	const int gridSize = 10;          // Grid dimensions
+	const float cubeSize = 0.3f;      // Cube size (to avoid excessive overlap)
+	const float cubePadding = 0.4f; // Cube spacing
+	const float gridCenter = (gridSize - 1) * (cubeSize + cubePadding) * 0.5f; // Grid center offset
+	const float cameraDistance = 8.0f; // Camera distance to grid center
+	for (int z = 0; z < gridSize; z++) {
+		for (int y = 0; y < gridSize; y++) {
+			for (int x = 0; x < gridSize; x++) {
+
+				Mesh* cube = new Mesh();
+				*cube = Mesh::makeCube(cubeSize);
+				scene.push_back(cube);
+
+				float posX = (x * (cubeSize + cubePadding)) - gridCenter;
+				float posY = (y * (cubeSize + cubePadding)) - gridCenter;
+				float posZ = (z * (cubeSize + cubePadding)) - gridCenter;
+				cube->world = matrix::makeTranslation(posX, posY, posZ);
+
+				// Generate random rotation increments for each cube
+				rRot rot{
+					rng.getRandomFloat(-0.02f, 0.02f),  // X-axis rotation increment
+					rng.getRandomFloat(-0.02f, 0.02f),  // Y-axis rotation increment
+					rng.getRandomFloat(-0.02f, 0.02f)   // Z-axis rotation increment
+				};
+				cubeRotations.push_back(rot);
+
+				// Initial random rotation
+				cube->world = cube->world * matrix::makeRotateXYZ(
+					rng.getRandomFloat(0.f, 3.14f),
+					rng.getRandomFloat(0.f, 3.14f),
+					rng.getRandomFloat(0.f, 3.14f)
+				);
+			}
+		}
+	}
+
+	// Camera rotation control variables
+	float cameraAngle = 0.0f;         // Camera rotation angle (radians)
+	const float angleStep = 0.01f;    // Rotation increment per frame (controls rotation speed)
+	const float fullCircle = 2 * 3.1415926f; // One full circle in radians (360 degrees)
+
+	
+	auto start = std::chrono::high_resolution_clock::now();
+	std::chrono::time_point<std::chrono::high_resolution_clock> end;
+	int cycle = 0; // Cycle count
+
+	bool running = true;
+	while (running) {
+		renderer.canvas.checkInput();
+		if (renderer.canvas.keyPressed(VK_ESCAPE)) break;
+
+		renderer.clear();
+
+
+		// Update cube rotations
+		for (unsigned int i = 0; i < cubeRotations.size(); i++) {
+			scene[i]->world = scene[i]->world * matrix::makeRotateXYZ(
+				cubeRotations[i].x,
+				cubeRotations[i].y,
+				cubeRotations[i].z
+			);
+		}
+
+		// Update camera position (circular orbit around Y-axis)    
+		// Calculate camera's circular coordinates
+		float camX = sin(cameraAngle) * cameraDistance;
+        float camZ = cos(cameraAngle) * cameraDistance; 
+        
+		// Construct camera matrix
+		matrix camRotate = matrix::makeRotateY(-cameraAngle); 
+		matrix camTranslate = matrix::makeTranslation(-camX, 0.0f, -(camZ));
+		camera = camRotate*camTranslate;
+
+		// Update camera rotation angle and check if a full circle is completed
+		cameraAngle += angleStep;
+		if (cameraAngle >= fullCircle) {
+			cameraAngle -= fullCircle; 
+			cycle++;                   
+
+			
+			end = std::chrono::high_resolution_clock::now();
+			double cycleTimeMs = std::chrono::duration<double, std::milli>(end - start).count();
+			std::cout << cycle << " :" << cycleTimeMs << "ms\n";
+			start = std::chrono::high_resolution_clock::now(); 
+		}
+
+		for (auto& m : scene) {
+			render(renderer, m, camera, L);
+		}
+
+		renderer.present();
+	}
+	for (auto& m : scene) {
+		delete m;
+	}
+}
+
 // Entry point of the application
 // No input variables
 int main() {
     // Uncomment the desired scene function to run
     //scene1();
     //scene2();
-    sceneTest(); 
+    scene3();
+    //sceneTest(); 
     
 
     return 0;

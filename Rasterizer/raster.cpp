@@ -255,7 +255,7 @@ void scene2() {
         delete m;
 }
 
-// Scene: 10¡Á10¡Á10 cubes + random rotation each cube + camera circular orbiting
+// Scene: 10x10x10 cubes + random rotation each cube + camera circular orbiting
 // No input variables
 void scene3() {
 	Renderer renderer;
@@ -268,7 +268,7 @@ void scene3() {
 
 	RandomNumberGenerator& rng = RandomNumberGenerator::getInstance();
 
-	// Create a 10¡Á10¡Á10 cubic grid (totaling 1000 cells)
+	// Create a 10x10x10 cubic grid (totaling 1000 cells)
 	const int gridSize = 10;          // Grid dimensions
 	const float cubeSize = 0.3f;      // Cube size (to avoid excessive overlap)
 	const float cubePadding = 0.4f; // Cube spacing

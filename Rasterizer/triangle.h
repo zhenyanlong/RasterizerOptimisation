@@ -99,67 +99,178 @@ public:
     // - L: Light object for shading calculations
     // - ka, kd: Ambient and diffuse lighting coefficients
     void draw(Renderer& renderer, Light& L, float ka, float kd) {
-        vec2D minV, maxV;
+  //      vec2D minV, maxV;
 
-        // Get the screen-space bounds of the triangle
+  //      // Get the screen-space bounds of the triangle
+  //      getBoundsWindow(renderer.canvas, minV, maxV);
+
+  //      // Skip very small triangles
+  //      if (area < 1.f) return;
+
+		//// pre - normalise light direction
+  //      L.omega_i.normalise();
+
+  //      // Iterate over the bounding box and check each pixel
+  //      for (int y = (int)(minV.y); y < (int)ceil(maxV.y); y++) {
+  //          
+  //          for (int x = (int)(minV.x); x < (int)ceil(maxV.x); x++) {
+  //              float alpha, beta, gamma;
+
+  //              // Check if the pixel lies inside the triangle
+  //              if (getCoordinates(vec2D((float)x, (float)y), alpha, beta, gamma)) {
+  //                  // Interpolate color, depth, and normals
+  //                  colour c = interpolate(beta, gamma, alpha, v[0].rgb, v[1].rgb, v[2].rgb);
+  //                  c.clampColour();
+  //                  float depth = interpolate(beta, gamma, alpha, v[0].p[2], v[1].p[2], v[2].p[2]);
+  //                  vec4 normal = interpolate(beta, gamma, alpha, v[0].normal, v[1].normal, v[2].normal);
+  //                  normal.normalise();
+
+  //                  // Perform Z-buffer test and apply shading
+  //                  if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
+  //                      // typical shader begin
+  //                      //L.omega_i.normalise();
+  //                      float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+  //                      colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
+  //                      // typical shader end
+  //                      unsigned char r, g, b;
+  //                      a.toRGB(r, g, b);
+  //                      renderer.canvas.draw(x, y, r, g, b);
+  //                      renderer.zbuffer(x, y) = depth;
+  //                  }
+  //              }
+  //               
+  //              
+  //          }
+  //      }
+
+        vec2D minV, maxV;
         getBoundsWindow(renderer.canvas, minV, maxV);
 
-        // Skip very small triangles
+    
         if (area < 1.f) return;
 
-		// pre - normalise light direction
         L.omega_i.normalise();
 
-        // Iterate over the bounding box and check each pixel
-        for (int y = (int)(minV.y); y < (int)ceil(maxV.y); y++) {
-            
-            for (int x = (int)(minV.x); x < (int)ceil(maxV.x); x++) {
-                float alpha, beta, gamma;
+        __m128 kd_vec = _mm_set1_ps(kd);
+        __m128 ka_vec = _mm_set1_ps(ka);
+        __m128 epsilon = _mm_set1_ps(0.001f);
+        __m128 zero = _mm_setzero_ps();
 
-                // Check if the pixel lies inside the triangle
-                if (getCoordinates(vec2D((float)x, (float)y), alpha, beta, gamma)) {
-                    // Interpolate color, depth, and normals
-                    colour c = interpolate(beta, gamma, alpha, v[0].rgb, v[1].rgb, v[2].rgb);
-                    c.clampColour();
-                    float depth = interpolate(beta, gamma, alpha, v[0].p[2], v[1].p[2], v[2].p[2]);
-                    vec4 normal = interpolate(beta, gamma, alpha, v[0].normal, v[1].normal, v[2].normal);
-                    normal.normalise();
+		// Precompute coefficients for barycentric coordinate calculation
+        float A_alpha = (v[0].p[1] - v[1].p[1]) / area;
+        float B_alpha = (v[1].p[0] - v[0].p[0]) / area;
+        float C_alpha = (v[0].p[0] * v[1].p[1] - v[1].p[0] * v[0].p[1]) / area;
 
-                    // Perform Z-buffer test and apply shading
-                    if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
-                        // typical shader begin
-                        //L.omega_i.normalise();
-                        float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                        colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
-                        // typical shader end
+	    float A_beta = (v[1].p[1] - v[2].p[1]) / area;
+	    float B_beta = (v[2].p[0] - v[1].p[0]) / area;
+        float C_beta = (v[1].p[0] * v[2].p[1] - v[2].p[0] * v[1].p[1]) / area;
+
+        float A_gamma = (v[2].p[1] - v[0].p[1]) / area;
+        float B_gamma = (v[0].p[0] - v[2].p[0]) / area;
+        float C_gamma = (v[2].p[0] * v[0].p[1] - v[0].p[0] * v[2].p[1]) / area;
+
+		// Loop over the bounding box of the triangle
+        int min_y = static_cast<int>(minV.y);
+        int max_y = static_cast<int>(std::ceil(maxV.y));
+        int min_x = static_cast<int>(minV.x);
+        int max_x = static_cast<int>(std::ceil(maxV.x));
+        int canvas_width = renderer.canvas.getWidth();
+
+		// Process 4 pixels in parallel using SIMD
+        for (int y = min_y; y <= max_y; y++) {
+            float fy = static_cast<float>(y);
+
+            for (int x = min_x; x <= max_x; x += 4) {
+                
+                int end_x = std::min(x + 3, canvas_width - 1);
+                
+                float xs[4];
+                xs[0] = static_cast<float>(x);
+                xs[1] = (x+1 <= end_x) ? static_cast<float>(x+1) : static_cast<float>(x);
+                xs[2] = (x+2 <= end_x) ? static_cast<float>(x+2) : static_cast<float>(x);
+                xs[3] = (x+3 <= end_x) ? static_cast<float>(x+3) : static_cast<float>(x);
+
+                __m128 x_vec = _mm_load_ps(xs);
+                __m128 y_vec = _mm_set1_ps(fy);
+
+				// Compute barycentric coordinates using SIMD
+                __m128 alpha = _mm_add_ps(
+                    _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_alpha), x_vec), _mm_mul_ps(_mm_set1_ps(B_alpha), y_vec)),
+                    _mm_set1_ps(C_alpha)
+                );
+                __m128 beta = _mm_add_ps(
+                    _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_beta), x_vec), _mm_mul_ps(_mm_set1_ps(B_beta), y_vec)),
+                    _mm_set1_ps(C_beta)
+                );
+                __m128 gamma = _mm_add_ps(
+                    _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_gamma), x_vec), _mm_mul_ps(_mm_set1_ps(B_gamma), y_vec)),
+                    _mm_set1_ps(C_gamma)
+                );
+
+				// Create a mask for pixels inside the triangle
+                __m128 mask_inside = _mm_and_ps(
+                    _mm_and_ps(_mm_cmpge_ps(alpha, zero), _mm_cmpge_ps(beta, zero)),
+                    _mm_cmpge_ps(gamma, zero)
+                );
+
+                if (_mm_movemask_ps(mask_inside) == 0) continue;
+
+				// Interpolate depth using barycentric coordinates
+                __m128 depth = _mm_add_ps(
+                    _mm_add_ps(_mm_mul_ps(alpha, _mm_set1_ps(v[0].p[2])),
+                               _mm_mul_ps(beta, _mm_set1_ps(v[1].p[2]))),
+                    _mm_mul_ps(gamma, _mm_set1_ps(v[2].p[2]))
+                );
+
+				// Load Z-buffer values for the 4 pixels
+                float zbuf_vals[4];
+                for (int i=0; i<4; i++) {
+                    int px = x + i;
+                    zbuf_vals[i] = (px <= end_x) ? renderer.zbuffer(px, y) : 1e9f;
+                }
+                __m128 zbuf = _mm_load_ps(zbuf_vals);
+
+				// Perform depth test using SIMD
+                __m128 depth_test1 = _mm_cmpgt_ps(zbuf, depth);
+                __m128 depth_test2 = _mm_cmpgt_ps(depth, epsilon);
+                __m128 depth_test = _mm_and_ps(depth_test1, depth_test2);
+                __m128 final_mask = _mm_and_ps(mask_inside, depth_test);
+                int mask = _mm_movemask_ps(final_mask);
+
+				// Store barycentric coordinates and depth to arrays for per-pixel processing
+                float alpha_arr[4], beta_arr[4], gamma_arr[4];
+                _mm_store_ps(alpha_arr, alpha);
+                _mm_store_ps(beta_arr, beta);
+                _mm_store_ps(gamma_arr, gamma);
+                float depth_arr[4];
+                _mm_store_ps(depth_arr, depth);
+
+				// Process each pixel based on the final mask
+                #pragma unroll(4)
+                for (int i = 0; i < 4; i++) {
+                    if (mask & (1 << i)) {
+                        int px = x + i;
+                        if (px > end_x) break;
+
+						// Interpolate color and normal for the pixel
+                        colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
+                        c.clampColour();
+                        vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
+                        normal.normalise();
+
+						// Compute lighting using the interpolated normal
+                        float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+                        colour diffuse = (c * kd) * (L.L * dot_val);
+                        colour ambient = L.ambient * ka;
+                        colour final_col = diffuse + ambient;
+
+						// Convert final color to RGB and draw the pixel
                         unsigned char r, g, b;
-                        a.toRGB(r, g, b);
-                        renderer.canvas.draw(x, y, r, g, b);
-                        renderer.zbuffer(x, y) = depth;
+                        final_col.toRGB(r, g, b);
+                        renderer.canvas.draw(px, y, r, g, b);
+                        renderer.zbuffer(px, y) = depth_arr[i];
                     }
                 }
-                 
-                // -- 用单位掩码替代分支 --//
-                //float is_inside = getCoordinates(vec2D((float)x, (float)y), alpha, beta, gamma) ? 1.f : 0.f;
-                //// Interpolate color, depth, and normals
-                //colour c = interpolate(beta, gamma, alpha, v[0].rgb, v[1].rgb, v[2].rgb) * is_inside;
-                //c.clampColour();
-                //float depth = interpolate(beta, gamma, alpha, v[0].p[2], v[1].p[2], v[2].p[2]) * is_inside;
-                //vec4 normal = interpolate(beta, gamma, alpha, v[0].normal, v[1].normal, v[2].normal) * is_inside;
-                //is_inside? normal.normalise() : (void)0;
-
-                //    // Perform Z-buffer test and apply shading
-                //    if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
-                //        // typical shader begin
-                //        //L.omega_i.normalise();
-                //        float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                //        colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
-                //        // typical shader end
-                //        unsigned char r, g, b;
-                //        a.toRGB(r, g, b);
-                //        renderer.canvas.draw(x, y, r, g, b);
-                //        renderer.zbuffer(x, y) = depth;
-                //    }
             }
         }
     }

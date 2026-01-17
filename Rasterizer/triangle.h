@@ -107,8 +107,12 @@ public:
         // Skip very small triangles
         if (area < 1.f) return;
 
+		// pre - normalise light direction
+        L.omega_i.normalise();
+
         // Iterate over the bounding box and check each pixel
         for (int y = (int)(minV.y); y < (int)ceil(maxV.y); y++) {
+            
             for (int x = (int)(minV.x); x < (int)ceil(maxV.x); x++) {
                 float alpha, beta, gamma;
 
@@ -124,7 +128,7 @@ public:
                     // Perform Z-buffer test and apply shading
                     if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
                         // typical shader begin
-                        L.omega_i.normalise();
+                        //L.omega_i.normalise();
                         float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
                         colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
                         // typical shader end
@@ -134,6 +138,28 @@ public:
                         renderer.zbuffer(x, y) = depth;
                     }
                 }
+                 
+                // -- 用单位掩码替代分支 --//
+                //float is_inside = getCoordinates(vec2D((float)x, (float)y), alpha, beta, gamma) ? 1.f : 0.f;
+                //// Interpolate color, depth, and normals
+                //colour c = interpolate(beta, gamma, alpha, v[0].rgb, v[1].rgb, v[2].rgb) * is_inside;
+                //c.clampColour();
+                //float depth = interpolate(beta, gamma, alpha, v[0].p[2], v[1].p[2], v[2].p[2]) * is_inside;
+                //vec4 normal = interpolate(beta, gamma, alpha, v[0].normal, v[1].normal, v[2].normal) * is_inside;
+                //is_inside? normal.normalise() : (void)0;
+
+                //    // Perform Z-buffer test and apply shading
+                //    if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
+                //        // typical shader begin
+                //        //L.omega_i.normalise();
+                //        float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+                //        colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
+                //        // typical shader end
+                //        unsigned char r, g, b;
+                //        a.toRGB(r, g, b);
+                //        renderer.canvas.draw(x, y, r, g, b);
+                //        renderer.zbuffer(x, y) = depth;
+                //    }
             }
         }
     }
@@ -144,6 +170,7 @@ public:
     void getBounds(vec2D& minV, vec2D& maxV) {
         minV = vec2D(v[0].p);
         maxV = vec2D(v[0].p);
+        #pragma unroll(2)
         for (unsigned int i = 1; i < 3; i++) {
             minV.x = std::min(minV.x, v[i].p[0]);
             minV.y = std::min(minV.y, v[i].p[1]);

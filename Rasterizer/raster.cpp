@@ -26,11 +26,13 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
     // Combine perspective, camera, and world transformations for the mesh
     matrix p = renderer.perspective * camera * mesh->world;
 
+
     // Iterate through all triangles in the mesh
     for (triIndices& ind : mesh->triangles) {
         Vertex t[3]; // Temporary array to store transformed triangle vertices
 
         // Transform each vertex of the triangle
+        #pragma unroll(3)
         for (unsigned int i = 0; i < 3; i++) {
             t[i].p = p * mesh->vertices[ind.v[i]].p; // Apply transformations
             t[i].p.divideW(); // Perspective division to normalize coordinates

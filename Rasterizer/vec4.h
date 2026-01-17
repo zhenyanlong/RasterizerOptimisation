@@ -55,7 +55,7 @@ public:
 
         // Now
         // / to *
-		const float invW = 1.0f / w;  // 预计算倒数，避免三次除法
+		const float invW = 1.0f / w;  
 		x *= invW;
 		y *= invW;
 		z *= invW;
@@ -65,7 +65,7 @@ public:
 		//__m128 vec = _mm_load_ps(v);
 		//__m128 inv_w = _mm_set1_ps(1.0f / w);
 		//vec = _mm_mul_ps(vec, inv_w);
-		//vec = _mm_blend_ps(vec, _mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f), 0x8);  // 设置w=1
+		//vec = _mm_blend_ps(vec, _mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f), 0x8);  
 		//_mm_store_ps(v, vec);
     }
 
@@ -117,7 +117,7 @@ public:
 
 		//vec4 ret;
 		//_mm_store_ps(ret.v, result);
-		//ret.w = 0.0f;  // 确保w为0
+		//ret.w = 0.0f;  
 		//return ret;
     }
 

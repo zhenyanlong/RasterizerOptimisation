@@ -142,137 +142,277 @@ public:
   //              
   //          }
   //      }
+        // -- SIMD 4 pixel -- //
+  //      vec2D minV, maxV;
+  //      getBoundsWindow(renderer.canvas, minV, maxV);
 
+  //  
+  //      if (area < 1.f) return;
+
+  //      L.omega_i.normalise();
+
+  //      __m128 kd_vec = _mm_set1_ps(kd);
+  //      __m128 ka_vec = _mm_set1_ps(ka);
+  //      __m128 epsilon = _mm_set1_ps(0.001f);
+  //      __m128 zero = _mm_setzero_ps();
+
+		//// Precompute coefficients for barycentric coordinate calculation
+  //      float A_alpha = (v[0].p[1] - v[1].p[1]) / area;
+  //      float B_alpha = (v[1].p[0] - v[0].p[0]) / area;
+  //      float C_alpha = (v[0].p[0] * v[1].p[1] - v[1].p[0] * v[0].p[1]) / area;
+
+	 //   float A_beta = (v[1].p[1] - v[2].p[1]) / area;
+	 //   float B_beta = (v[2].p[0] - v[1].p[0]) / area;
+  //      float C_beta = (v[1].p[0] * v[2].p[1] - v[2].p[0] * v[1].p[1]) / area;
+
+  //      float A_gamma = (v[2].p[1] - v[0].p[1]) / area;
+  //      float B_gamma = (v[0].p[0] - v[2].p[0]) / area;
+  //      float C_gamma = (v[2].p[0] * v[0].p[1] - v[0].p[0] * v[2].p[1]) / area;
+
+		//// Loop over the bounding box of the triangle
+  //      int min_y = static_cast<int>(minV.y);
+  //      int max_y = static_cast<int>(std::ceil(maxV.y));
+  //      int min_x = static_cast<int>(minV.x);
+  //      int max_x = static_cast<int>(std::ceil(maxV.x));
+  //      int canvas_width = renderer.canvas.getWidth();
+
+		//// Process 4 pixels in parallel using SIMD
+  //      for (int y = min_y; y <= max_y; y++) {
+  //          float fy = static_cast<float>(y);
+
+  //          for (int x = min_x; x <= max_x; x += 4) {
+  //              
+  //              int end_x = std::min(x + 3, canvas_width - 1);
+  //              
+  //              float xs[4];
+  //              xs[0] = static_cast<float>(x);
+  //              xs[1] = (x+1 <= end_x) ? static_cast<float>(x+1) : static_cast<float>(x);
+  //              xs[2] = (x+2 <= end_x) ? static_cast<float>(x+2) : static_cast<float>(x);
+  //              xs[3] = (x+3 <= end_x) ? static_cast<float>(x+3) : static_cast<float>(x);
+
+  //              __m128 x_vec = _mm_load_ps(xs);
+  //              __m128 y_vec = _mm_set1_ps(fy);
+
+		//		// Compute barycentric coordinates using SIMD
+  //              __m128 alpha = _mm_add_ps(
+  //                  _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_alpha), x_vec), _mm_mul_ps(_mm_set1_ps(B_alpha), y_vec)),
+  //                  _mm_set1_ps(C_alpha)
+  //              );
+  //              __m128 beta = _mm_add_ps(
+  //                  _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_beta), x_vec), _mm_mul_ps(_mm_set1_ps(B_beta), y_vec)),
+  //                  _mm_set1_ps(C_beta)
+  //              );
+  //              __m128 gamma = _mm_add_ps(
+  //                  _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_gamma), x_vec), _mm_mul_ps(_mm_set1_ps(B_gamma), y_vec)),
+  //                  _mm_set1_ps(C_gamma)
+  //              );
+
+		//		// Create a mask for pixels inside the triangle
+  //              __m128 mask_inside = _mm_and_ps(
+  //                  _mm_and_ps(_mm_cmpge_ps(alpha, zero), _mm_cmpge_ps(beta, zero)),
+  //                  _mm_cmpge_ps(gamma, zero)
+  //              );
+
+  //              if (_mm_movemask_ps(mask_inside) == 0) continue;
+
+		//		// Interpolate depth using barycentric coordinates
+  //              __m128 depth = _mm_add_ps(
+  //                  _mm_add_ps(_mm_mul_ps(alpha, _mm_set1_ps(v[0].p[2])),
+  //                             _mm_mul_ps(beta, _mm_set1_ps(v[1].p[2]))),
+  //                  _mm_mul_ps(gamma, _mm_set1_ps(v[2].p[2]))
+  //              );
+
+		//		// Load Z-buffer values for the 4 pixels
+  //              float zbuf_vals[4];
+  //              for (int i=0; i<4; i++) {
+  //                  int px = x + i;
+  //                  zbuf_vals[i] = (px <= end_x) ? renderer.zbuffer(px, y) : 1e9f;
+  //              }
+  //              __m128 zbuf = _mm_load_ps(zbuf_vals);
+
+		//		// Perform depth test using SIMD
+  //              __m128 depth_test1 = _mm_cmpgt_ps(zbuf, depth);
+  //              __m128 depth_test2 = _mm_cmpgt_ps(depth, epsilon);
+  //              __m128 depth_test = _mm_and_ps(depth_test1, depth_test2);
+  //              __m128 final_mask = _mm_and_ps(mask_inside, depth_test);
+  //              int mask = _mm_movemask_ps(final_mask);
+
+		//		// Store barycentric coordinates and depth to arrays for per-pixel processing
+  //              float alpha_arr[4], beta_arr[4], gamma_arr[4];
+  //              _mm_store_ps(alpha_arr, alpha);
+  //              _mm_store_ps(beta_arr, beta);
+  //              _mm_store_ps(gamma_arr, gamma);
+  //              float depth_arr[4];
+  //              _mm_store_ps(depth_arr, depth);
+
+		//		// Process each pixel based on the final mask
+  //              #pragma unroll(4)
+  //              for (int i = 0; i < 4; i++) {
+  //                  if (mask & (1 << i)) {
+  //                      int px = x + i;
+  //                      if (px > end_x) break;
+
+		//				// Interpolate color and normal for the pixel
+  //                      colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
+  //                      c.clampColour();
+  //                      vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
+  //                      normal.normalise();
+
+		//				// Compute lighting using the interpolated normal
+  //                      float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+  //                      colour diffuse = (c * kd) * (L.L * dot_val);
+  //                      colour ambient = L.ambient * ka;
+  //                      colour final_col = diffuse + ambient;
+
+		//				// Convert final color to RGB and draw the pixel
+  //                      unsigned char r, g, b;
+  //                      final_col.toRGB(r, g, b);
+  //                      renderer.canvas.draw(px, y, r, g, b);
+  //                      renderer.zbuffer(px, y) = depth_arr[i];
+  //                  }
+  //              }
+  //          }
+  //      }
         vec2D minV, maxV;
         getBoundsWindow(renderer.canvas, minV, maxV);
-
-    
+        
         if (area < 1.f) return;
-
+        
         L.omega_i.normalise();
-
-        __m128 kd_vec = _mm_set1_ps(kd);
-        __m128 ka_vec = _mm_set1_ps(ka);
-        __m128 epsilon = _mm_set1_ps(0.001f);
-        __m128 zero = _mm_setzero_ps();
-
-		// Precompute coefficients for barycentric coordinate calculation
+        
+        
+        __m256 kd_vec = _mm256_set1_ps(kd);
+        __m256 ka_vec = _mm256_set1_ps(ka);
+        __m256 epsilon = _mm256_set1_ps(0.001f);
+        __m256 zero = _mm256_setzero_ps();
+        
+        // Pre-compute coefficients for barycentric coordinate calculation
         float A_alpha = (v[0].p[1] - v[1].p[1]) / area;
         float B_alpha = (v[1].p[0] - v[0].p[0]) / area;
         float C_alpha = (v[0].p[0] * v[1].p[1] - v[1].p[0] * v[0].p[1]) / area;
-
-	    float A_beta = (v[1].p[1] - v[2].p[1]) / area;
-	    float B_beta = (v[2].p[0] - v[1].p[0]) / area;
+        
+        float A_beta = (v[1].p[1] - v[2].p[1]) / area;
+        float B_beta = (v[2].p[0] - v[1].p[0]) / area;
         float C_beta = (v[1].p[0] * v[2].p[1] - v[2].p[0] * v[1].p[1]) / area;
-
+        
         float A_gamma = (v[2].p[1] - v[0].p[1]) / area;
         float B_gamma = (v[0].p[0] - v[2].p[0]) / area;
         float C_gamma = (v[2].p[0] * v[0].p[1] - v[0].p[0] * v[2].p[1]) / area;
-
-		// Loop over the bounding box of the triangle
+        
+        // Loop over the bounding box of the triangle
         int min_y = static_cast<int>(minV.y);
         int max_y = static_cast<int>(std::ceil(maxV.y));
         int min_x = static_cast<int>(minV.x);
         int max_x = static_cast<int>(std::ceil(maxV.x));
         int canvas_width = renderer.canvas.getWidth();
-
-		// Process 4 pixels in parallel using SIMD
+        
+        // Process 8 pixels in parallel using SIMD
         for (int y = min_y; y <= max_y; y++) {
-            float fy = static_cast<float>(y);
-
-            for (int x = min_x; x <= max_x; x += 4) {
-                
-                int end_x = std::min(x + 3, canvas_width - 1);
-                
-                float xs[4];
-                xs[0] = static_cast<float>(x);
-                xs[1] = (x+1 <= end_x) ? static_cast<float>(x+1) : static_cast<float>(x);
-                xs[2] = (x+2 <= end_x) ? static_cast<float>(x+2) : static_cast<float>(x);
-                xs[3] = (x+3 <= end_x) ? static_cast<float>(x+3) : static_cast<float>(x);
-
-                __m128 x_vec = _mm_load_ps(xs);
-                __m128 y_vec = _mm_set1_ps(fy);
-
-				// Compute barycentric coordinates using SIMD
-                __m128 alpha = _mm_add_ps(
-                    _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_alpha), x_vec), _mm_mul_ps(_mm_set1_ps(B_alpha), y_vec)),
-                    _mm_set1_ps(C_alpha)
-                );
-                __m128 beta = _mm_add_ps(
-                    _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_beta), x_vec), _mm_mul_ps(_mm_set1_ps(B_beta), y_vec)),
-                    _mm_set1_ps(C_beta)
-                );
-                __m128 gamma = _mm_add_ps(
-                    _mm_add_ps(_mm_mul_ps(_mm_set1_ps(A_gamma), x_vec), _mm_mul_ps(_mm_set1_ps(B_gamma), y_vec)),
-                    _mm_set1_ps(C_gamma)
-                );
-
-				// Create a mask for pixels inside the triangle
-                __m128 mask_inside = _mm_and_ps(
-                    _mm_and_ps(_mm_cmpge_ps(alpha, zero), _mm_cmpge_ps(beta, zero)),
-                    _mm_cmpge_ps(gamma, zero)
-                );
-
-                if (_mm_movemask_ps(mask_inside) == 0) continue;
-
-				// Interpolate depth using barycentric coordinates
-                __m128 depth = _mm_add_ps(
-                    _mm_add_ps(_mm_mul_ps(alpha, _mm_set1_ps(v[0].p[2])),
-                               _mm_mul_ps(beta, _mm_set1_ps(v[1].p[2]))),
-                    _mm_mul_ps(gamma, _mm_set1_ps(v[2].p[2]))
-                );
-
-				// Load Z-buffer values for the 4 pixels
-                float zbuf_vals[4];
-                for (int i=0; i<4; i++) {
-                    int px = x + i;
-                    zbuf_vals[i] = (px <= end_x) ? renderer.zbuffer(px, y) : 1e9f;
-                }
-                __m128 zbuf = _mm_load_ps(zbuf_vals);
-
-				// Perform depth test using SIMD
-                __m128 depth_test1 = _mm_cmpgt_ps(zbuf, depth);
-                __m128 depth_test2 = _mm_cmpgt_ps(depth, epsilon);
-                __m128 depth_test = _mm_and_ps(depth_test1, depth_test2);
-                __m128 final_mask = _mm_and_ps(mask_inside, depth_test);
-                int mask = _mm_movemask_ps(final_mask);
-
-				// Store barycentric coordinates and depth to arrays for per-pixel processing
-                float alpha_arr[4], beta_arr[4], gamma_arr[4];
-                _mm_store_ps(alpha_arr, alpha);
-                _mm_store_ps(beta_arr, beta);
-                _mm_store_ps(gamma_arr, gamma);
-                float depth_arr[4];
-                _mm_store_ps(depth_arr, depth);
-
-				// Process each pixel based on the final mask
-                #pragma unroll(4)
-                for (int i = 0; i < 4; i++) {
-                    if (mask & (1 << i)) {
-                        int px = x + i;
-                        if (px > end_x) break;
-
-						// Interpolate color and normal for the pixel
-                        colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
-                        c.clampColour();
-                        vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
-                        normal.normalise();
-
-						// Compute lighting using the interpolated normal
-                        float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-                        colour diffuse = (c * kd) * (L.L * dot_val);
-                        colour ambient = L.ambient * ka;
-                        colour final_col = diffuse + ambient;
-
-						// Convert final color to RGB and draw the pixel
-                        unsigned char r, g, b;
-                        final_col.toRGB(r, g, b);
-                        renderer.canvas.draw(px, y, r, g, b);
-                        renderer.zbuffer(px, y) = depth_arr[i];
-                    }
-                }
-            }
+        	float fy = static_cast<float>(y);
+        
+        	// x步长从4改为8
+        	for (int x = min_x; x <= max_x; x += 8) {
+        
+        		// 结束x从x+3改为x+7
+        		int end_x = std::min(x + 7, canvas_width - 1);
+        
+        		// 数组大小从4改为8
+        		float xs[8];
+                #pragma unroll(8)
+        		for (int i = 0; i < 8; i++) {
+        			int px = x + i;
+        			xs[i] = (px <= end_x) ? static_cast<float>(px) : static_cast<float>(x);
+        		}
+        
+        		// 替换为AVX指令
+        		__m256 x_vec = _mm256_loadu_ps(xs);
+        		__m256 y_vec = _mm256_set1_ps(fy);
+        
+        		// Compute barycentric coordinates using SIMD
+        		__m256 alpha = _mm256_add_ps(
+        			_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(A_alpha), x_vec), _mm256_mul_ps(_mm256_set1_ps(B_alpha), y_vec)),
+        			_mm256_set1_ps(C_alpha)
+        		);
+        		__m256 beta = _mm256_add_ps(
+        			_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(A_beta), x_vec), _mm256_mul_ps(_mm256_set1_ps(B_beta), y_vec)),
+        			_mm256_set1_ps(C_beta)
+        		);
+        		__m256 gamma = _mm256_add_ps(
+        			_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(A_gamma), x_vec), _mm256_mul_ps(_mm256_set1_ps(B_gamma), y_vec)),
+        			_mm256_set1_ps(C_gamma)
+        		);
+        
+        		// Create a mask for pixels inside the triangle
+        		__m256 alpha_ge_zero = _mm256_cmp_ps(alpha, zero, _CMP_GE_OS);
+        		__m256 beta_ge_zero = _mm256_cmp_ps(beta, zero, _CMP_GE_OS);
+        		__m256 gamma_ge_zero = _mm256_cmp_ps(gamma, zero, _CMP_GE_OS);
+        		__m256 mask_inside = _mm256_and_ps(
+        			_mm256_and_ps(alpha_ge_zero, beta_ge_zero),
+        			gamma_ge_zero
+        		);
+        
+        		// 替换为_mm256_movemask_ps
+        		if (_mm256_movemask_ps(mask_inside) == 0) continue;
+        
+        		// Interpolate depth using barycentric coordinates
+        		__m256 depth = _mm256_add_ps(
+        			_mm256_add_ps(_mm256_mul_ps(alpha, _mm256_set1_ps(v[0].p[2])),
+        				_mm256_mul_ps(beta, _mm256_set1_ps(v[1].p[2]))),
+        			_mm256_mul_ps(gamma, _mm256_set1_ps(v[2].p[2]))
+        		);
+        
+        		// Load Z-buffer values for the 8 pixels
+        		float zbuf_vals[8];
+        		for (int i = 0; i < 8; i++) {
+        			int px = x + i;
+        			zbuf_vals[i] = (px <= end_x) ? renderer.zbuffer(px, y) : 1e9f;
+        		}
+        		__m256 zbuf = _mm256_loadu_ps(zbuf_vals);
+        
+        		// Perform depth test using SIMD
+        		__m256 depth_test1 = _mm256_cmp_ps(zbuf, depth, _CMP_GT_OS);
+        		__m256 depth_test2 = _mm256_cmp_ps(depth, epsilon, _CMP_GT_OS);
+        		__m256 depth_test = _mm256_and_ps(depth_test1, depth_test2);
+        		__m256 final_mask = _mm256_and_ps(mask_inside, depth_test);
+        		int mask = _mm256_movemask_ps(final_mask);
+        
+        		// Store barycentric coordinates and depth to arrays
+        		float alpha_arr[8], beta_arr[8], gamma_arr[8];
+        		_mm256_storeu_ps(alpha_arr, alpha);
+        		_mm256_storeu_ps(beta_arr, beta);
+        		_mm256_storeu_ps(gamma_arr, gamma);
+        		float depth_arr[8];
+        		_mm256_storeu_ps(depth_arr, depth);
+        
+        		// Process each pixel based on the final mask
+                #pragma unroll(8) 
+        		for (int i = 0; i < 8; i++) {
+        			if (mask & (1 << i)) {
+        				int px = x + i;
+        				if (px > end_x) break;
+        
+        				// Interpolate color and normal for the pixel
+        				colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
+        				c.clampColour();
+        				vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
+        				normal.normalise();
+        
+        				// Compute lighting using the interpolated normal
+        				float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+        				colour diffuse = (c * kd) * (L.L * dot_val);
+        				colour ambient = L.ambient * ka;
+        				colour final_col = diffuse + ambient;
+        
+        				// Convert final color to RGB and draw the pixel
+        				unsigned char r, g, b;
+        				final_col.toRGB(r, g, b);
+        				renderer.canvas.draw(px, y, r, g, b);
+        				renderer.zbuffer(px, y) = depth_arr[i];
+        			}
+        		}
+        	}
         }
+
     }
 
     // Compute the 2D bounds of the triangle

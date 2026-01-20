@@ -7,6 +7,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <thread>
+#include <mutex>
 
 // Simple support class for a 2D vector
 class vec2D {

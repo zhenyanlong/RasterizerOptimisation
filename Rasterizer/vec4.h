@@ -34,15 +34,39 @@ public:
     // Returns a new scaled `vec4`.
     vec4 operator*(float scalar) const {
         return { x * scalar, y * scalar, z * scalar, w * scalar };
+
+		// -- SIMD -- //
+		/*__m128 vec = _mm_load_ps(v);
+		__m128 scale = _mm_set1_ps(scalar);
+		__m128 result = _mm_mul_ps(vec, scale);
+
+		vec4 ret;
+		_mm_store_ps(ret.v, result);
+		return ret;*/
     }
 
     // Divides the vector by its W component and sets W to 1.
     // Useful for normalizing the W component after transformations.
     void divideW() {
-        x /= w;
-        y /= w;
-        z /= w;
-        w = 1.f;
+		/*x /= w;
+		y /= w;
+		z /= w;
+		w = 1.f;*/
+
+        // Now
+        // / to *
+		const float invW = 1.0f / w;  
+		x *= invW;
+		y *= invW;
+		z *= invW;
+		w = 1.f;
+
+		// -- SIMD -- //
+		//__m128 vec = _mm_load_ps(v);
+		//__m128 inv_w = _mm_set1_ps(1.0f / w);
+		//vec = _mm_mul_ps(vec, inv_w);
+		//vec = _mm_blend_ps(vec, _mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f), 0x8);  
+		//_mm_store_ps(v, vec);
     }
 
     // Accesses a vector component by index.
@@ -67,6 +91,16 @@ public:
     // Returns a new `vec4` resulting from the subtraction.
     vec4 operator-(const vec4& other) const {
         return vec4(x - other.x, y - other.y, z - other.z, 0.0f);
+
+		// -- SIMD -- //
+		//__m128 v1 = _mm_load_ps(v);
+		//__m128 v2 = _mm_load_ps(other.v);
+		//__m128 result = _mm_sub_ps(v1, v2);
+
+		//vec4 ret;
+		//_mm_store_ps(ret.v, result);
+		//ret.w = 0.0f;  // È·±£wÎª0
+		//return ret;
     }
 
     // Adds another vector to this vector.
@@ -75,6 +109,16 @@ public:
     // Returns a new `vec4` resulting from the addition.
     vec4 operator+(const vec4& other) const {
         return vec4(x + other.x, y + other.y, z + other.z, 0.0f);
+
+		// -- SIMD -- //
+		//__m128 v1 = _mm_load_ps(v);
+		//__m128 v2 = _mm_load_ps(other.v);
+		//__m128 result = _mm_add_ps(v1, v2);
+
+		//vec4 ret;
+		//_mm_store_ps(ret.v, result);
+		//ret.w = 0.0f;  
+		//return ret;
     }
 
     // Computes the cross product of two vectors.
@@ -103,9 +147,16 @@ public:
     // Normalizes the vector to make its length equal to 1.
     // This operation does not affect the W component.
     void normalise() {
-        float length = std::sqrt(x * x + y * y + z * z);
-        x /= length;
-        y /= length;
-        z /= length;
+		/*float length = std::sqrt(x * x + y * y + z * z);
+		x /= length;
+		y /= length;
+		z /= length;*/
+
+		// Now
+        // / to *
+		float invlength = 1.0f / std::sqrt(x * x + y * y + z * z);
+		x *= invlength;
+		y *= invlength;
+		z *= invlength;
     }
 };

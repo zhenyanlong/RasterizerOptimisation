@@ -15,6 +15,7 @@
 #include "RNG.h"
 #include "light.h"
 #include "triangle.h"
+#include "ThreadPool.h"
 
 // Main rendering function that processes a mesh, transforms its vertices, applies lighting, and draws triangles on the canvas.
 // Input Variables:
@@ -59,6 +60,189 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
         tri.draw(renderer, L, mesh->ka, mesh->kd);
     }
 }
+
+std::atomic<int> mesh_index(0);
+std::atomic<int> tri_index(0);
+ThreadPool thread_pool(3); // 传0自动适配CPU核心数
+
+// another type of render function, transmit a vector array of meshes to render
+void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, Light& L, int num_threads) {
+	// Combine perspective, camera, and world transformations for the mesh
+	// create threads
+	// 先收集所有需要处理的三角形任务
+	struct RenderTask {
+		Mesh* mesh;
+		size_t triangle_index;
+		matrix transform;
+	};
+
+	std::vector<RenderTask> tasks;
+
+	// 预计算所有任务
+	for (auto& mesh : scene) {
+		if (!mesh) continue;
+
+		matrix p = renderer.perspective * camera * mesh->world;
+
+		for (size_t i = 0; i < mesh->triangles.size(); ++i) {
+			tasks.push_back({ mesh, i, p });
+		}
+	}
+
+	// 使用原子索引来分配任务
+	std::atomic<size_t> task_index(0);
+	size_t total_tasks = tasks.size();
+
+	auto render_task = [&](int thread_id) {
+		while (true) {
+			// 原子获取下一个任务索引
+			size_t current_task = task_index.fetch_add(1);
+
+			if (current_task >= total_tasks) {
+				break;
+			}
+
+			const auto& task = tasks[current_task];
+			triIndices& ind = task.mesh->triangles[task.triangle_index];
+			Vertex t[3];
+
+			// Transform vertices
+#pragma unroll(3)
+			for (unsigned int i = 0; i < 3; i++) {
+				t[i].p = task.transform * task.mesh->vertices[ind.v[i]].p;
+				t[i].p.divideW();
+
+				t[i].normal = task.mesh->world * task.mesh->vertices[ind.v[i]].normal;
+				t[i].normal.normalise();
+
+				t[i].p[0] = (t[i].p[0] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getWidth());
+				t[i].p[1] = (t[i].p[1] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getHeight());
+				t[i].p[1] = renderer.canvas.getHeight() - t[i].p[1];
+
+				t[i].rgb = task.mesh->vertices[ind.v[i]].rgb;
+			}
+
+			// Clip
+			if (fabs(t[0].p[2]) > 1.0f || fabs(t[1].p[2]) > 1.0f || fabs(t[2].p[2]) > 1.0f) continue;
+
+			// Draw
+			triangle tri(t[0], t[1], t[2]);
+			tri.draw(renderer, L, task.mesh->ka, task.mesh->kd);
+		}
+		};
+
+	// 创建线程
+	std::vector<std::thread> threads;
+	threads.reserve(num_threads);
+
+	for (int i = 0; i < num_threads; ++i) {
+		threads.emplace_back(render_task, i);
+	}
+
+	// 等待完成
+	for (auto& thread : threads) {
+		if (thread.joinable()) {
+			thread.join();
+		}
+	}
+	
+
+	// 线程执行函数：每个线程循环获取网格，处理该网格的所有三角形
+	//auto render_worker = [&]() {
+	//	while (true) {
+	//		// 1. 原子获取当前要处理的网格索引（递增前的值）
+	//		int mesh_idx = current_mesh_index.fetch_add(1);
+	//		// 2. 检查是否超出场景范围，超出则退出线程
+	//		if (mesh_idx >= static_cast<int>(scene.size())) {
+	//			break;
+	//		}
+	//		// 3. 获取当前网格（确保不会越界）
+	//		Mesh* mesh = scene[mesh_idx];
+	//		if (!mesh) continue; // 防御性检查：空指针跳过
+
+	//		// 4. 计算该网格的变换矩阵（每个网格只计算一次，避免重复计算）
+	//		matrix p = renderer.perspective * camera * mesh->world;
+
+	//		// 5. 处理该网格的所有三角形
+	//		for (triIndices& ind : mesh->triangles) {
+	//			Vertex t[3];
+ //               #pragma unroll(3)
+	//			for (unsigned int i = 0; i < 3; i++) {
+	//				t[i].p = p * mesh->vertices[ind.v[i]].p;
+	//				t[i].p.divideW();
+	//				t[i].normal = mesh->world * mesh->vertices[ind.v[i]].normal;
+	//				t[i].normal.normalise();
+	//				t[i].p[0] = (t[i].p[0] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getWidth());
+	//				t[i].p[1] = (t[i].p[1] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getHeight());
+	//				t[i].p[1] = renderer.canvas.getHeight() - t[i].p[1];
+	//				t[i].rgb = mesh->vertices[ind.v[i]].rgb;
+	//			}
+	//			// 裁剪Z值超出范围的三角形
+	//			if (fabs(t[0].p[2]) > 1.0f || fabs(t[1].p[2]) > 1.0f || fabs(t[2].p[2]) > 1.0f) continue;
+
+	//			// 渲染三角形（Renderer的锁会保护资源）
+	//			triangle tri(t[0], t[1], t[2]);
+	//			tri.draw(renderer, L, mesh->ka, mesh->kd);
+	//		}
+	//	}
+	//	};
+
+	//// 创建并启动线程
+	//std::vector<std::thread> threads;
+	//threads.reserve(multi_nums);
+	//for (int i = 0; i < multi_nums; i++) {
+	//	threads.emplace_back(render_worker);
+	//}
+
+	//// 等待所有线程执行完成（关键：必须join，否则渲染未完成就继续）
+	//for (auto& t : threads) {
+	//	if (t.joinable()) {
+	//		t.join();
+	//	}
+	//}
+}
+//void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, Light& L, ThreadPool& thread_pool) {
+//	// 遍历所有网格，为每个网格创建渲染任务并提交到线程池
+//	for (size_t mesh_idx = 0; mesh_idx < scene.size(); ++mesh_idx) {
+//		Mesh* mesh = scene[mesh_idx];
+//		if (!mesh) continue; // 空指针防御
+//
+//		// 提交渲染单个网格的任务（捕获值，避免引用失效）
+//		thread_pool.enqueue([&renderer, mesh, &camera, &L]() {
+//			// 计算该网格的变换矩阵（每个网格仅计算一次）
+//			matrix p = renderer.perspective * camera * mesh->world;
+//
+//			// 处理该网格的所有三角形
+//			for (triIndices& ind : mesh->triangles) {
+//				Vertex t[3];
+//#pragma unroll(3)
+//				for (unsigned int i = 0; i < 3; i++) {
+//					t[i].p = p * mesh->vertices[ind.v[i]].p;
+//					t[i].p.divideW();
+//					t[i].normal = mesh->world * mesh->vertices[ind.v[i]].normal;
+//					t[i].normal.normalise();
+//					// 屏幕空间映射
+//					t[i].p[0] = (t[i].p[0] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getWidth());
+//					t[i].p[1] = (t[i].p[1] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getHeight());
+//					t[i].p[1] = renderer.canvas.getHeight() - t[i].p[1];
+//					t[i].rgb = mesh->vertices[ind.v[i]].rgb;
+//				}
+//
+//				// 裁剪Z值超出范围的三角形
+//				if (fabs(t[0].p[2]) > 1.0f || fabs(t[1].p[2]) > 1.0f || fabs(t[2].p[2]) > 1.0f) {
+//					continue;
+//				}
+//
+//				// 渲染三角形（Renderer的全局锁保护资源）
+//				triangle tri(t[0], t[1], t[2]);
+//				tri.draw(renderer, L, mesh->ka, mesh->kd);
+//			}
+//			});
+//	}
+//
+//	// 等待当前帧所有渲染任务完成（关键：确保渲染完再present）
+//	thread_pool.wait_all_tasks();
+//}
 
 // Test scene function to demonstrate rendering with user-controlled transformations
 // No input variables
@@ -357,9 +541,11 @@ void scene3() {
 			start = std::chrono::high_resolution_clock::now(); 
 		}
 
-		for (auto& m : scene) {
+		/*for (auto& m : scene) {
 			render(renderer, m, camera, L);
-		}
+		}*/
+
+		renderScene(renderer, scene, camera, L, 8);
 
 		renderer.present();
 	}
@@ -371,6 +557,8 @@ void scene3() {
 // Entry point of the application
 // No input variables
 int main() {
+	
+	std::cout << "线程池创建完成，线程数：" << thread_pool.get_thread_count() << std::endl;
     // Uncomment the desired scene function to run
     //scene1();
     //scene2();

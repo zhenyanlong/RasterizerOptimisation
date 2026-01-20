@@ -388,30 +388,73 @@ public:
         
         		// Process each pixel based on the final mask
                 #pragma unroll(8) 
-        		for (int i = 0; i < 8; i++) {
-        			if (mask & (1 << i)) {
-        				int px = x + i;
-        				if (px > end_x) break;
-        
-        				// Interpolate color and normal for the pixel
-        				colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
-        				c.clampColour();
-        				vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
-        				normal.normalise();
-        
-        				// Compute lighting using the interpolated normal
-        				float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
-        				colour diffuse = (c * kd) * (L.L * dot_val);
-        				colour ambient = L.ambient * ka;
-        				colour final_col = diffuse + ambient;
-        
-        				// Convert final color to RGB and draw the pixel
-        				unsigned char r, g, b;
-        				final_col.toRGB(r, g, b);
-        				renderer.canvas.draw(px, y, r, g, b);
-        				renderer.zbuffer(px, y) = depth_arr[i];
-        			}
-        		}
+      //  		for (int i = 0; i < 8; i++) {
+      //  			if (mask & (1 << i)) {
+      //  				int px = x + i;
+      //  				if (px > end_x) break;
+      //  
+      //  				// Interpolate color and normal for the pixel
+      //  				colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
+      //  				c.clampColour();
+      //  				vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
+      //  				normal.normalise();
+      //  
+      //  				// Compute lighting using the interpolated normal
+      //  				float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+      //  				colour diffuse = (c * kd) * (L.L * dot_val);
+      //  				colour ambient = L.ambient * ka;
+      //  				colour final_col = diffuse + ambient;
+      //  
+      //  				// Convert final color to RGB and draw the pixel
+      //  				unsigned char r, g, b;
+      //  				final_col.toRGB(r, g, b);
+						//std::lock_guard<std::mutex> lock(renderer.mtx);
+      //  				renderer.canvas.draw(px, y, r, g, b);
+      //  				renderer.zbuffer(px, y) = depth_arr[i];
+      //  			}
+      //  		}
+                std::vector<std::tuple<int, int, unsigned char, unsigned char, unsigned char, float>> pixel_updates;
+                
+				for (int i = 0; i < 8; i++) {
+					if (mask & (1 << i)) {
+						int px = x + i;
+						if (px > end_x) break;
+
+						// Interpolate color and normal for the pixel
+						colour c = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].rgb, v[1].rgb, v[2].rgb);
+						c.clampColour();
+						vec4 normal = interpolate(alpha_arr[i], beta_arr[i], gamma_arr[i], v[0].normal, v[1].normal, v[2].normal);
+						normal.normalise();
+
+						// Compute lighting using the interpolated normal
+	     				float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+	     				colour diffuse = (c * kd) * (L.L * dot_val);
+	     				colour ambient = L.ambient * ka;
+						colour final_col = diffuse + ambient;
+
+						unsigned char r, g, b;
+						final_col.toRGB(r, g, b);
+
+						// 收集更新，而不是立即绘制
+						pixel_updates.emplace_back(px, y, r, g, b, depth_arr[i]);
+					}
+				}
+
+				// 在函数最后批量更新
+				if (!pixel_updates.empty()) {
+                    std::lock_guard<std::mutex> lock(renderer.mtx);
+					for (const auto& update : pixel_updates) {
+						int px, py;
+						unsigned char r, g, b;
+						float depth;
+						std::tie(px, py, r, g, b, depth) = update;
+
+						if (renderer.zbuffer(px, py) > depth) {
+							renderer.canvas.draw(px, py, r, g, b);
+							renderer.zbuffer(px, py) = depth;
+						}
+					}
+				}
         	}
         }
 

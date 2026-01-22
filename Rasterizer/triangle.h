@@ -9,6 +9,7 @@
 #include <cmath>
 #include <thread>
 #include <mutex>
+#include "SpinLock.h"
 
 // Simple support class for a 2D vector
 class vec2D {
@@ -325,7 +326,7 @@ public:
         
         		
         		float xs[8];
-                #pragma unroll(8)
+                #pragma loop(8)
         		for (int i = 0; i < 8; i++) {
         			int px = x + i;
         			xs[i] = (px <= end_x) ? static_cast<float>(px) : static_cast<float>(x);
@@ -393,7 +394,7 @@ public:
         		_mm256_storeu_ps(depth_arr, depth);
         
         		// Process each pixel based on the final mask
-                #pragma unroll(8) 
+                #pragma loop(8) 
       //  		for (int i = 0; i < 8; i++) {
       //  			if (mask & (1 << i)) {
       //  				int px = x + i;
@@ -448,13 +449,14 @@ public:
 
 				// 在函数最后批量更新
 				if (!pixel_updates.empty()) {
-                    std::lock_guard<std::mutex> lock(renderer.mtx);
+                    
 					for (const auto& update : pixel_updates) {
 						int px, py;
 						unsigned char r, g, b;
 						float depth;
 						std::tie(px, py, r, g, b, depth) = update;
 
+                        //SpinLockGuard lock(renderer.mtx);
 						if (renderer.zbuffer(px, py) > depth) {
 							renderer.canvas.draw(px, py, r, g, b);
 							renderer.zbuffer(px, py) = depth;
@@ -472,7 +474,7 @@ public:
     void getBounds(vec2D& minV, vec2D& maxV) {
         minV = vec2D(v[0].p);
         maxV = vec2D(v[0].p);
-        #pragma unroll(2)
+        #pragma loop(2)
         for (unsigned int i = 1; i < 3; i++) {
             minV.x = std::min(minV.x, v[i].p[0]);
             minV.y = std::min(minV.y, v[i].p[1]);

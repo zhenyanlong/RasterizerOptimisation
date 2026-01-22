@@ -5,6 +5,7 @@
 #include "GamesEngineeringBase.h" // Include the GamesEngineeringBase header
 #include <algorithm>
 #include <chrono>
+#include <atomic>
 
 #include <cmath>
 #include "matrix.h"
@@ -33,7 +34,7 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
         Vertex t[3]; // Temporary array to store transformed triangle vertices
 
         // Transform each vertex of the triangle
-        #pragma unroll(3)
+        #pragma loop(3)
         for (unsigned int i = 0; i < 3; i++) {
             t[i].p = p * mesh->vertices[ind.v[i]].p; // Apply transformations
             t[i].p.divideW(); // Perspective division to normalize coordinates
@@ -63,7 +64,7 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
 
 std::atomic<int> mesh_index(0);
 std::atomic<int> tri_index(0);
-ThreadPool thread_pool(3); // 传0自动适配CPU核心数
+ThreadPool thread_pool(22); // 传0自动适配CPU核心数
 
 // another type of render function, transmit a vector array of meshes to render
 void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, Light& L, int num_threads) {
@@ -96,7 +97,7 @@ void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, 
 	auto render_task = [&](int thread_id) {
 		while (true) {
 			// 原子获取下一个任务索引
-			size_t current_task = task_index.fetch_add(1);
+			size_t current_task = task_index.fetch_add(1, std::memory_order_relaxed);
 
 			if (current_task >= total_tasks) {
 				break;
@@ -107,7 +108,7 @@ void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, 
 			Vertex t[3];
 
 			// Transform vertices
-#pragma unroll(3)
+#pragma loop(3)
 			for (unsigned int i = 0; i < 3; i++) {
 				t[i].p = task.transform * task.mesh->vertices[ind.v[i]].p;
 				t[i].p.divideW();
@@ -201,48 +202,48 @@ void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, 
 	//	}
 	//}
 }
-//void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, Light& L, ThreadPool& thread_pool) {
-//	// 遍历所有网格，为每个网格创建渲染任务并提交到线程池
-//	for (size_t mesh_idx = 0; mesh_idx < scene.size(); ++mesh_idx) {
-//		Mesh* mesh = scene[mesh_idx];
-//		if (!mesh) continue; // 空指针防御
-//
-//		// 提交渲染单个网格的任务（捕获值，避免引用失效）
-//		thread_pool.enqueue([&renderer, mesh, &camera, &L]() {
-//			// 计算该网格的变换矩阵（每个网格仅计算一次）
-//			matrix p = renderer.perspective * camera * mesh->world;
-//
-//			// 处理该网格的所有三角形
-//			for (triIndices& ind : mesh->triangles) {
-//				Vertex t[3];
-//#pragma unroll(3)
-//				for (unsigned int i = 0; i < 3; i++) {
-//					t[i].p = p * mesh->vertices[ind.v[i]].p;
-//					t[i].p.divideW();
-//					t[i].normal = mesh->world * mesh->vertices[ind.v[i]].normal;
-//					t[i].normal.normalise();
-//					// 屏幕空间映射
-//					t[i].p[0] = (t[i].p[0] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getWidth());
-//					t[i].p[1] = (t[i].p[1] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getHeight());
-//					t[i].p[1] = renderer.canvas.getHeight() - t[i].p[1];
-//					t[i].rgb = mesh->vertices[ind.v[i]].rgb;
-//				}
-//
-//				// 裁剪Z值超出范围的三角形
-//				if (fabs(t[0].p[2]) > 1.0f || fabs(t[1].p[2]) > 1.0f || fabs(t[2].p[2]) > 1.0f) {
-//					continue;
-//				}
-//
-//				// 渲染三角形（Renderer的全局锁保护资源）
-//				triangle tri(t[0], t[1], t[2]);
-//				tri.draw(renderer, L, mesh->ka, mesh->kd);
-//			}
-//			});
-//	}
-//
-//	// 等待当前帧所有渲染任务完成（关键：确保渲染完再present）
-//	thread_pool.wait_all_tasks();
-//}
+void renderScene(Renderer& renderer, std::vector<Mesh*>& scene, matrix& camera, Light& L, ThreadPool& thread_pool) {
+	// 遍历所有网格，为每个网格创建渲染任务并提交到线程池
+	for (size_t mesh_idx = 0; mesh_idx < scene.size(); ++mesh_idx) {
+		Mesh* mesh = scene[mesh_idx];
+		if (!mesh) continue; // 空指针防御
+
+		// 提交渲染单个网格的任务（捕获值，避免引用失效）
+		thread_pool.enqueue([&renderer, mesh, &camera, &L]() {
+			// 计算该网格的变换矩阵（每个网格仅计算一次）
+			matrix p = renderer.perspective * camera * mesh->world;
+
+			// 处理该网格的所有三角形
+			for (triIndices& ind : mesh->triangles) {
+				Vertex t[3];
+#pragma loop(3)
+				for (unsigned int i = 0; i < 3; i++) {
+					t[i].p = p * mesh->vertices[ind.v[i]].p;
+					t[i].p.divideW();
+					t[i].normal = mesh->world * mesh->vertices[ind.v[i]].normal;
+					t[i].normal.normalise();
+					// 屏幕空间映射
+					t[i].p[0] = (t[i].p[0] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getWidth());
+					t[i].p[1] = (t[i].p[1] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getHeight());
+					t[i].p[1] = renderer.canvas.getHeight() - t[i].p[1];
+					t[i].rgb = mesh->vertices[ind.v[i]].rgb;
+				}
+
+				// 裁剪Z值超出范围的三角形
+				if (fabs(t[0].p[2]) > 1.0f || fabs(t[1].p[2]) > 1.0f || fabs(t[2].p[2]) > 1.0f) {
+					continue;
+				}
+
+				// 渲染三角形（Renderer的全局锁保护资源）
+				triangle tri(t[0], t[1], t[2]);
+				tri.draw(renderer, L, mesh->ka, mesh->kd);
+			}
+			});
+	}
+
+	// 等待当前帧所有渲染任务完成（关键：确保渲染完再present）
+	thread_pool.wait_all_tasks();
+}
 
 // Test scene function to demonstrate rendering with user-controlled transformations
 // No input variables
@@ -362,8 +363,9 @@ void scene1() {
             }
         }
 
-        for (auto& m : scene)
-            render(renderer, m, camera, L);
+        /*for (auto& m : scene)
+            render(renderer, m, camera, L);*/
+		renderScene(renderer, scene, camera, L, thread_pool);
         renderer.present();
     }
 
@@ -432,8 +434,9 @@ void scene2() {
 
         if (renderer.canvas.keyPressed(VK_ESCAPE)) break;
 
-        for (auto& m : scene)
-            render(renderer, m, camera, L);
+		/*for (auto& m : scene)
+			render(renderer, m, camera, L);*/
+		renderScene(renderer, scene, camera, L, thread_pool);
         renderer.present();
     }
 
@@ -545,7 +548,7 @@ void scene3() {
 			render(renderer, m, camera, L);
 		}*/
 
-		renderScene(renderer, scene, camera, L, 8);
+		renderScene(renderer, scene, camera, L, thread_pool);
 
 		renderer.present();
 	}
@@ -558,11 +561,11 @@ void scene3() {
 // No input variables
 int main() {
 	
-	std::cout << "线程池创建完成，线程数：" << thread_pool.get_thread_count() << std::endl;
+	//std::cout << "线程池创建完成，线程数：" << thread_pool.get_thread_count() << std::endl;
     // Uncomment the desired scene function to run
     //scene1();
-    //scene2();
-    scene3();
+    scene2();
+    //scene3();
     //sceneTest(); 
     
 

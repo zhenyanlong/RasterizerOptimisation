@@ -10,100 +10,99 @@
 #include <atomic>
 #include <stdexcept>
 
-// 轻量级线程池类（适配渲染场景）
+
 class ThreadPool {
 private:
-	// 工作线程列表
+	// List of worker threads
 	std::vector<std::thread> workers;
-	// 任务队列
+	// Task queue
 	std::queue<std::function<void()>> tasks;
 
-	// 同步相关
-	std::mutex queue_mutex;       // 保护任务队列的锁
-	std::condition_variable cv;   // 唤醒线程的条件变量
-	bool stop;                    // 线程池停止标志
-	std::atomic<int> task_count;  // 未完成的任务数（用于每帧等待）
+	
+	std::mutex queue_mutex;       // Lock for protecting the task queue
+	std::condition_variable cv;   // The condition variable for waking up a thread
+	bool stop;                    // Thread pool stop flag
+	std::atomic<int> task_count;  // Number of unfinished tasks (used for per-frame waiting)
 
 public:
-	// 构造函数：创建指定数量的工作线程
+	// Constructor: create a specified number of worker threads
 	explicit ThreadPool(size_t num_threads) : stop(false), task_count(0) {
 		if (num_threads == 0) {
-			num_threads = std::thread::hardware_concurrency(); // 默认使用CPU核心数
-			if (num_threads == 0) num_threads = 4; // 兜底
+			num_threads = std::thread::hardware_concurrency(); // Default to number of CPU cores
+			if (num_threads == 0) num_threads = 4; // Fallback
 		}
 
-		// 创建工作线程
+		// Create worker threads
 		for (size_t i = 0; i < num_threads; ++i) {
 			workers.emplace_back([this]() {
-				// 线程循环：等待并执行任务
+				// Thread loop: wait for and execute tasks
 				while (true) {
 					std::function<void()> task;
 
-					// 加锁获取任务
+					// Lock and get task
 					{
 						std::unique_lock<std::mutex> lock(this->queue_mutex);
-						// 等待条件：有任务 或 线程池停止
+						// Wait condition: there are tasks or the thread pool is stopped
 						this->cv.wait(lock, [this]() {
 							return this->stop || !this->tasks.empty();
 							});
 
-						// 线程池停止且无任务 → 退出
+						// Thread pool stopped and no tasks → exit
 						if (this->stop && this->tasks.empty()) {
 							return;
 						}
 
-						// 取出任务
+						// Get task
 						task = std::move(this->tasks.front());
 						this->tasks.pop();
 					}
 
-					// 执行任务
+					// Execute task
 					task();
-					// 任务完成：计数减1
+					// Task completed: decrement count
 					this->task_count.fetch_sub(1);
 				}
 				});
 		}
 	}
 
-	// 禁用拷贝构造和赋值
 	ThreadPool(const ThreadPool&) = delete;
 	ThreadPool& operator=(const ThreadPool&) = delete;
 
-	// 提交任务到线程池
+	// Submit a task to the thread pool
 	template<class F>
 	void enqueue(F&& f) {
 		{
 			std::unique_lock<std::mutex> lock(queue_mutex);
-			// 线程池已停止 → 拒绝提交任务
+			// Thread pool stopped → reject task submission
 			if (stop) {
 				throw std::runtime_error("enqueue on stopped ThreadPool");
 			}
-			// 添加任务到队列
+			// Add task to queue	
 			tasks.emplace(std::forward<F>(f));
-			// 任务计数加1
+			// Increment task count
 			task_count.fetch_add(1);
 		}
-		// 唤醒一个等待的线程
+		// Wake up one waiting thread
 		cv.notify_one();
 	}
 
-	// 等待所有已提交的任务执行完成（每帧渲染关键）
+	// Wait for all submitted tasks to complete
 	void wait_all_tasks() {
 		while (task_count.load() > 0) {
-			std::this_thread::yield(); // 让出CPU，避免忙等
+			std::this_thread::yield(); // Yield CPU to avoid busy waiting
 		}
 	}
 
-	// 销毁线程池：停止所有线程并等待退出
+	
 	~ThreadPool() {
 		{
 			std::unique_lock<std::mutex> lock(queue_mutex);
 			stop = true;
 		}
-		// 唤醒所有线程
+		
 		cv.notify_all();
-		// 等待所有线程退出
+		
 		for (std::thread& worker : workers) {
 			if (worker.joinable()) {
 				worker.join();
@@ -111,7 +110,6 @@ public:
 		}
 	}
 
-	// 获取线程池的线程数量
 	size_t get_thread_count() const {
 		return workers.size();
 	}

@@ -60,6 +60,53 @@ void render(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L) {
     }
 }
 
+// 多线程渲染函数 - 使用高性能线程池
+void renderMultiThread(Renderer& renderer, Mesh* mesh, matrix& camera, Light& L,
+	int mode = 0) {  // 0: tile-based, 1: by object, 2: batch
+	matrix p = renderer.perspective * camera * mesh->world;
+
+	std::vector<triangle> triangles;
+
+	for (triIndices& ind : mesh->triangles) {
+		Vertex t[3];
+
+		for (unsigned int i = 0; i < 3; i++) {
+			t[i].p = p * mesh->vertices[ind.v[i]].p;
+			t[i].p.divideW();
+
+			t[i].normal = mesh->world * mesh->vertices[ind.v[i]].normal;
+			t[i].normal.normalise();
+
+			t[i].p[0] = (t[i].p[0] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getWidth());
+			t[i].p[1] = (t[i].p[1] + 1.f) * 0.5f * static_cast<float>(renderer.canvas.getHeight());
+			t[i].p[1] = renderer.canvas.getHeight() - t[i].p[1];
+
+			t[i].rgb = mesh->vertices[ind.v[i]].rgb;
+		}
+
+		if (fabs(t[0].p[2]) > 1.0f || fabs(t[1].p[2]) > 1.0f || fabs(t[2].p[2]) > 1.0f) continue;
+
+		triangles.emplace_back(t[0], t[1], t[2]);
+	}
+
+	// 根据模式选择不同的渲染策略
+	switch (mode) {
+	case 0:  // Tile-based（最适合大量小三角形）
+		HighPerformanceRenderer::renderMultiThread(renderer, triangles, L, mesh->ka, mesh->kd, 32);
+		break;
+	case 1:  // By object（减少任务数量）
+		HighPerformanceRenderer::renderByObject(renderer, triangles, L, mesh->ka, mesh->kd);
+		break;
+	case 2:  // Batch（平衡任务开销）
+		HighPerformanceRenderer::renderBatch(renderer, triangles, L, mesh->ka, mesh->kd, 50);
+		break;
+	default:
+		// 默认使用batch模式
+		HighPerformanceRenderer::renderBatch(renderer, triangles, L, mesh->ka, mesh->kd, 50);
+		break;
+	}
+}
+
 // Test scene function to demonstrate rendering with user-controlled transformations
 // No input variables
 void sceneTest() {
@@ -311,7 +358,7 @@ void scene3() {
 	float cameraAngle = 0.0f;         // Camera rotation angle (radians)
 	const float angleStep = 0.01f;    // Rotation increment per frame (controls rotation speed)
 	const float fullCircle = 2 * 3.1415926f; // One full circle in radians (360 degrees)
-
+    int renderMode = 1;  // 默认使用tile-based多线程
 	
 	auto start = std::chrono::high_resolution_clock::now();
 	std::chrono::time_point<std::chrono::high_resolution_clock> end;
@@ -357,8 +404,16 @@ void scene3() {
 			start = std::chrono::high_resolution_clock::now(); 
 		}
 
-		for (auto& m : scene) {
+		/*for (auto& m : scene) {
 			render(renderer, m, camera, L);
+		}*/
+		for (auto& m : scene) {
+			if (renderMode == 0) {
+				render(renderer, m, camera, L);
+			}
+			else {
+				renderMultiThread(renderer, m, camera, L, renderMode - 1);
+			}
 		}
 
 		renderer.present();

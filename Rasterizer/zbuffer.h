@@ -9,7 +9,9 @@ template<std::floating_point T> // Restricts T to be a floating-point type
 class Zbuffer {
     T* buffer;                  // Pointer to the buffer storing depth values - can also use unique_ptr []here
     unsigned int width, height; // Dimensions of the Z-buffer
-
+    __m256 fillValue;
+    size_t totalElements;
+    size_t simdElements;
 public:
     // Constructor to initialize a Z-buffer with the given width and height.
     // Allocates memory for the buffer.
@@ -34,6 +36,10 @@ public:
         height = h;
         if (buffer != nullptr) delete[] buffer; // remove previous version
         buffer = new T[width * height]; // Allocate memory for the buffer
+
+        fillValue = _mm256_set1_ps(1.0f);
+		totalElements = width * height;
+		simdElements = totalElements & ~7; 
     }
 
     // Accesses the depth value at the specified (x, y) coordinate.
@@ -48,10 +54,17 @@ public:
     // Clears the Z-buffer by setting all depth values to 1.0f,
     // which represents the farthest possible depth.
     void clear() {
-        // could also use fill_n
-        for (unsigned int i = 0; i < width * height; i++) {
-            buffer[i] = T(1.0); // Reset each depth value
-        }
+		
+			float* ptr = buffer;
+			for (size_t i = 0; i < simdElements; i += 8) {
+				_mm256_storeu_ps(ptr + i, fillValue);
+			}
+
+			for (size_t i = simdElements; i < totalElements; i++) {
+				ptr[i] = 1.0f;
+			}
+		
+		
     }
 
     // remove copying
@@ -75,6 +88,8 @@ public:
             width = other.width;
             height = other.height;
             other.buffer = nullptr;
+			totalElements = other.totalElements;
+			simdElements = other.simdElements;
         }
         return *this;
     }

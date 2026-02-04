@@ -275,9 +275,14 @@ public:
   //              }
   //          }
   //      }
+if (isBackFacing()) {
+	return;
+}
+
         vec2D minV, maxV;
         getBoundsWindow(renderer.canvas, minV, maxV);
         
+        if (maxV.x <= minV.x || maxV.y <= minV.y) return;
         if (area < 1.f) return;
         
         L.omega_i.normalise();
@@ -466,4 +471,15 @@ public:
         }
         std::cout << std::endl;
     }
+
+	bool isBackFacing() const {
+		// 计算三角形的2D面积（有符号）
+		vec2D e1 = vec2D(v[1].p - v[0].p);
+		vec2D e2 = vec2D(v[2].p - v[0].p);
+		float signedArea = (e1.x * e2.y - e1.y * e2.x);
+
+		// 在屏幕空间中，顺时针三角形是背面（有符号面积为负）
+		// 注意：我们的Y轴是向下的，所以符号可能需要调整
+		return signedArea <= 0.0f;
+	}
 };

@@ -99,14 +99,19 @@ public:
     // - L: Light object for shading calculations
     // - ka, kd: Ambient and diffuse lighting coefficients
     void draw(Renderer& renderer, Light& L, float ka, float kd) {
+		if (isBackFacing()) {
+			return;
+		}
+
         vec2D minV, maxV;
 
         // Get the screen-space bounds of the triangle
         getBoundsWindow(renderer.canvas, minV, maxV);
 
+        //if (maxV.x <= minV.x || maxV.y <= minV.y) return;
         // Skip very small triangles
         if (area < 1.f) return;
-
+        L.omega_i.normalise();
         // Iterate over the bounding box and check each pixel
         for (int y = (int)(minV.y); y < (int)ceil(maxV.y); y++) {
             for (int x = (int)(minV.x); x < (int)ceil(maxV.x); x++) {
@@ -124,7 +129,7 @@ public:
                     // Perform Z-buffer test and apply shading
                     if (renderer.zbuffer(x, y) > depth && depth > 0.001f) {
                         // typical shader begin
-                        L.omega_i.normalise();
+                        
                         float dot = std::max(vec4::dot(L.omega_i, normal), 0.0f);
                         colour a = (c * kd) * (L.L * dot) + (L.ambient * ka); // using kd instead of ka for ambient
                         // typical shader end
@@ -186,4 +191,15 @@ public:
         }
         std::cout << std::endl;
     }
+
+	bool isBackFacing() const {
+		// 计算三角形的2D面积（有符号）
+		vec2D e1 = vec2D(v[1].p - v[0].p);
+		vec2D e2 = vec2D(v[2].p - v[0].p);
+		float signedArea = (e1.x * e2.y - e1.y * e2.x);
+
+		// 在屏幕空间中，顺时针三角形是背面（有符号面积为负）
+		// 注意：我们的Y轴是向下的，所以符号可能需要调整
+		return signedArea <= 0.0f;
+	}
 };

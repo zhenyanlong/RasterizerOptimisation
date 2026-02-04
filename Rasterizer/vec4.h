@@ -155,8 +155,10 @@ public:
 		// Now
         // / to *
 		float invlength = 1.0f / std::sqrt(x * x + y * y + z * z);
+		//float invlength = FastInvSqrt(x * x + y * y + z * z);
 		x *= invlength;
 		y *= invlength;
 		z *= invlength;
     }
+
 };

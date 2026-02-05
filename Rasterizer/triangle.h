@@ -99,9 +99,6 @@ public:
     // - L: Light object for shading calculations
     // - ka, kd: Ambient and diffuse lighting coefficients
     void draw(Renderer& renderer, Light& L, float ka, float kd) {
-		/*if (isBackFacing()) {
-			return;
-		}*/
 
         vec2D minV, maxV;
 

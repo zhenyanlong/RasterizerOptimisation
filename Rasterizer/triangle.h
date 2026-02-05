@@ -275,9 +275,9 @@ public:
   //              }
   //          }
   //      }
-if (isBackFacing()) {
-	return;
-}
+        if (isBackFacing()) {
+	        return;
+        }
 
         vec2D minV, maxV;
         getBoundsWindow(renderer.canvas, minV, maxV);
@@ -317,13 +317,13 @@ if (isBackFacing()) {
         for (int y = min_y; y <= max_y; y++) {
         	float fy = static_cast<float>(y);
         
-        	// x步长从4改为8
+        	
         	for (int x = min_x; x <= max_x; x += 8) {
         
-        		// 结束x从x+3改为x+7
+        		
         		int end_x = std::min(x + 7, canvas_width - 1);
         
-        		// 数组大小从4改为8
+        		
         		float xs[8];
                 #pragma unroll(8)
         		for (int i = 0; i < 8; i++) {
@@ -331,7 +331,7 @@ if (isBackFacing()) {
         			xs[i] = (px <= end_x) ? static_cast<float>(px) : static_cast<float>(x);
         		}
         
-        		// 替换为AVX指令
+        		// replace to AVX instructions
         		__m256 x_vec = _mm256_loadu_ps(xs);
         		__m256 y_vec = _mm256_set1_ps(fy);
         
@@ -358,7 +358,7 @@ if (isBackFacing()) {
         			gamma_ge_zero
         		);
         
-        		// 替换为_mm256_movemask_ps
+        		// replace to _mm256_movemask_ps
         		if (_mm256_movemask_ps(mask_inside) == 0) continue;
         
         		// Interpolate depth using barycentric coordinates
@@ -370,6 +370,7 @@ if (isBackFacing()) {
         
         		// Load Z-buffer values for the 8 pixels
         		float zbuf_vals[8];
+                #pragma unroll(8)
         		for (int i = 0; i < 8; i++) {
         			int px = x + i;
         			zbuf_vals[i] = (px <= end_x) ? renderer.zbuffer(px, y) : 1e9f;

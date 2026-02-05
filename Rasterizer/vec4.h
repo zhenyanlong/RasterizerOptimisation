@@ -154,11 +154,21 @@ public:
 
 		// Now
         // / to *
-		float invlength = 1.0f / std::sqrt(x * x + y * y + z * z);
-		//float invlength = FastInvSqrt(x * x + y * y + z * z);
+		//float invlength = 1.0f / std::sqrt(x * x + y * y + z * z);
+		float invlength = FastInvSqrt(x * x + y * y + z * z);
 		x *= invlength;
 		y *= invlength;
 		z *= invlength;
     }
 
+	float FastInvSqrt(float x) {
+		uint32_t i;
+		float y = x;
+		i = *reinterpret_cast<uint32_t*>(&y);
+		i = 0x5f3759df - (i >> 1);
+		y = *reinterpret_cast<float*>(&i);
+
+		y = y * (1.5f - (x * 0.5f * y * y));
+		return y;
+	}
 };

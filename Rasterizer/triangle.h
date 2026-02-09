@@ -442,12 +442,12 @@ public:
 						unsigned char r, g, b;
 						final_col.toRGB(r, g, b);
 
-						// 收集更新，而不是立即绘制
+						
 						pixel_updates.emplace_back(px, y, r, g, b, depth_arr[i]);
 					}
 				}
 
-				// 在函数最后批量更新
+			
 				if (!pixel_updates.empty()) {
                     
 					for (const auto& update : pixel_updates) {

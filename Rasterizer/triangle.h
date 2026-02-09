@@ -423,6 +423,173 @@ public:
 
     }
 
+    void drawTiled(Renderer& renderer, Light& L, float ka, float kd, Tile& tile) {
+        // Similar to draw() but processes the triangle in tiles for better cache performance
+        // Implementation would involve dividing the bounding box into smaller tiles and processing each tile separately
+        // This is a more advanced optimization and can be implemented as needed
+		// Process pixels belonging to this Tile
+		int tileStartX = tile.x;
+		int tileStartY = tile.y;
+		int tileEndX = tile.x + tile.width;
+		int tileEndY = tile.y + tile.height;
+
+		if (isBackFacing()) return;
+
+		vec2D triMinV, triMaxV;
+		getBounds(triMinV, triMaxV);
+
+		L.omega_i.normalise();
+
+		__m256 kd_vec = _mm256_set1_ps(kd);
+		__m256 ka_vec = _mm256_set1_ps(ka);
+		__m256 epsilon = _mm256_set1_ps(0.001f);
+		__m256 zero = _mm256_setzero_ps();
+
+		// Pre-compute coefficients for barycentric coordinate calculation
+		float A_alpha = (v[0].p[1] - v[1].p[1]) / area;
+		float B_alpha = (v[1].p[0] - v[0].p[0]) / area;
+		float C_alpha = (v[0].p[0] * v[1].p[1] - v[1].p[0] * v[0].p[1]) / area;
+
+		float A_beta = (v[1].p[1] - v[2].p[1]) / area;
+		float B_beta = (v[2].p[0] - v[1].p[0]) / area;
+		float C_beta = (v[1].p[0] * v[2].p[1] - v[2].p[0] * v[1].p[1]) / area;
+
+		float A_gamma = (v[2].p[1] - v[0].p[1]) / area;
+		float B_gamma = (v[0].p[0] - v[2].p[0]) / area;
+		float C_gamma = (v[2].p[0] * v[0].p[1] - v[0].p[0] * v[2].p[1]) / area;
+
+		// Loop over the bounding box of the triangle
+		int min_x = std::max(static_cast<int>(triMinV.x), tileStartX);
+		int max_x = std::min(static_cast<int>(std::ceil(triMaxV.x)), tileEndX);
+		int min_y = std::max(static_cast<int>(triMinV.y), tileStartY);
+		int max_y = std::min(static_cast<int>(std::ceil(triMaxV.y)), tileEndY);
+
+        if (min_x >= max_x || min_y >= max_y) return;
+
+		// Process pixels within the Tile
+		for (int y = min_y; y < max_y; ++y) {
+			float fy = static_cast<float>(y);
+			__m256 y_vec = _mm256_set1_ps(fy);
+
+			// Process 8 pixels in a row using AVX for 8 floats
+			for (int x = min_x; x < max_x; x += 8) {
+				int end_x = std::min(x + 7, max_x - 1);
+				int validPixels = end_x - x + 1;
+
+				// Prepare x coordinate array
+				float xs[8];
+				for (int i = 0; i < 8; ++i) {
+					int px = x + i;
+					xs[i] = (i < validPixels) ? static_cast<float>(px) : 0.0f;
+				}
+
+				__m256 x_vec = _mm256_loadu_ps(xs);
+
+				// Compute barycentric coordinates using SIMD
+				__m256 alpha = _mm256_add_ps(
+					_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(A_alpha), x_vec), _mm256_mul_ps(_mm256_set1_ps(B_alpha), y_vec)),
+					_mm256_set1_ps(C_alpha)
+				);
+				__m256 beta = _mm256_add_ps(
+					_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(A_beta), x_vec), _mm256_mul_ps(_mm256_set1_ps(B_beta), y_vec)),
+					_mm256_set1_ps(C_beta)
+				);
+				__m256 gamma = _mm256_add_ps(
+					_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(A_gamma), x_vec), _mm256_mul_ps(_mm256_set1_ps(B_gamma), y_vec)),
+					_mm256_set1_ps(C_gamma)
+				);
+
+				// Check if pixels are inside the triangle (alpha >= 0, beta >= 0, gamma >= 0)
+				__m256 alpha_ge_zero = _mm256_cmp_ps(alpha, zero, _CMP_GE_OS);
+				__m256 beta_ge_zero = _mm256_cmp_ps(beta, zero, _CMP_GE_OS);
+				__m256 gamma_ge_zero = _mm256_cmp_ps(gamma, zero, _CMP_GE_OS);
+				__m256 mask_inside = _mm256_and_ps(
+					_mm256_and_ps(alpha_ge_zero, beta_ge_zero),
+					gamma_ge_zero
+				);
+
+				int inside_mask = _mm256_movemask_ps(mask_inside);
+				if (inside_mask == 0) continue;
+
+				// Interpolate depth
+				__m256 depth = _mm256_add_ps(
+					_mm256_add_ps(_mm256_mul_ps(alpha, depth0_vec),
+						_mm256_mul_ps(beta, depth1_vec)),
+					_mm256_mul_ps(gamma, depth2_vec)
+				);
+
+				// Load current depth values from the Tile buffer
+				float currentDepths[8];
+				for (int i = 0; i < validPixels; ++i) {
+					int tileX = (x + i) - tile.x;
+					int tileY = y - tile.y;
+					int tileIdx = tileY * tile.width + tileX;
+					currentDepths[i] = tile.depthBuffer[tileIdx];
+				}
+				for (int i = validPixels; i < 8; ++i) {
+					currentDepths[i] = 1.0f; // Invalid pixels set to farthest depth
+				}
+
+				__m256 currentDepthVec = _mm256_loadu_ps(currentDepths);
+
+				// Depth test: currentDepth > depth && depth > 0.001f
+				__m256 depth_test1 = _mm256_cmp_ps(currentDepthVec, depth, _CMP_GT_OS);
+				__m256 depth_test2 = _mm256_cmp_ps(depth, epsilon, _CMP_GT_OS);
+				__m256 depth_test = _mm256_and_ps(depth_test1, depth_test2);
+				__m256 final_mask = _mm256_and_ps(mask_inside, depth_test);
+
+				int final_mask_bits = _mm256_movemask_ps(final_mask);
+				if (final_mask_bits == 0) continue;
+
+				// Store interpolated results
+				float alpha_arr[8], beta_arr[8], gamma_arr[8], depth_arr[8];
+				_mm256_storeu_ps(alpha_arr, alpha);
+				_mm256_storeu_ps(beta_arr, beta);
+				_mm256_storeu_ps(gamma_arr, gamma);
+				_mm256_storeu_ps(depth_arr, depth);
+
+				// Process each pixel that passed the test
+				for (int i = 0; i < validPixels; ++i) {
+					if (!(final_mask_bits & (1 << i))) continue;
+
+					int pixelX = x + i;
+					int pixelY = y;
+					int tileX = pixelX - tile.x;
+					int tileY = pixelY - tile.y;
+					int tileIdx = tileY * tile.width + tileX;
+
+					// Interpolate color
+					colour c = interpolate(beta_arr[i], gamma_arr[i], alpha_arr[i],
+						col0, col1, col2);
+					c.clampColour();
+
+					// Interpolate normal
+					vec4 normal = interpolate(beta_arr[i], gamma_arr[i], alpha_arr[i],
+						normal0, normal1, normal2);
+					normal.normalise();
+
+					// Compute lighting
+					float dot_val = std::max(vec4::dot(L.omega_i, normal), 0.0f);
+					colour diffuse = (c * kd) * (L.L * dot_val);
+					colour ambient = L.ambient * ka;
+					colour final_col = diffuse + ambient;
+
+					// Convert to RGB
+					unsigned char r, g, b;
+					final_col.toRGB(r, g, b);
+
+					// update Tile buffer
+					tile.depthBuffer[tileIdx] = depth_arr[i];
+					int colorIdx = tileIdx * 3;
+					tile.colorBuffer[colorIdx] = r;
+					tile.colorBuffer[colorIdx + 1] = g;
+					tile.colorBuffer[colorIdx + 2] = b;
+				}
+			}
+		}
+
+	}
+
     // Compute the 2D bounds of the triangle
     // Output Variables:
     // - minV, maxV: Minimum and maximum bounds in 2D space
@@ -474,13 +641,11 @@ public:
     }
 
 	bool isBackFacing() const {
-		// 计算三角形的2D面积（有符号）
+		
 		vec2D e1 = vec2D(v[1].p - v[0].p);
 		vec2D e2 = vec2D(v[2].p - v[0].p);
 		float signedArea = (e1.x * e2.y - e1.y * e2.x);
 
-		// 在屏幕空间中，顺时针三角形是背面（有符号面积为负）
-		// 注意：我们的Y轴是向下的，所以符号可能需要调整
 		return signedArea <= 0.0f;
 	}
 };
